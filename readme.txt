@@ -69,3 +69,8 @@ supabase-qili.iloveweiqi.com
 
 在【胜负处】添加子类，提示：
 duplicate key value violates unique constraint "categories_pkey"
+
+棋子在手机端显示不清晰，主要是圆边有锯齿。
+
+答案只有一步的时候，录入提示：❌ 未检测到正解 (需包含下一手) (黑:23 白:23)
+不应该，因为有的题目答案确实只有一步。

@@ -11,10 +11,9 @@
     </div>
 
     <div class="board-wrapper" ref="boardWrapper">
+      <!-- ⚠️ 注意：这里去掉了 :width 和 :height，改在 JS 里控制高清分辨率 -->
       <canvas 
         ref="boardCanvas" 
-        :width="boardSize" 
-        :height="boardSize" 
         @click="handleBoardClick"
       ></canvas>
     </div>
@@ -84,6 +83,7 @@ const currentSgfData = ref(null)
 const playedMoves = ref([])       
 const stepIndex = ref(0)          
 
+// 逻辑尺寸 (CSS像素)，实际绘制时会乘以 dpr
 const boardSize = ref(350)
 const boardCanvas = ref(null)
 let logoClickCount = 0
@@ -197,8 +197,11 @@ const handleBoardClick = async (e) => {
     return
   }
 
+  // 使用 getBoundingClientRect 获取的坐标是 CSS 像素
   const rect = boardCanvas.value.getBoundingClientRect()
   const gap = boardSize.value / 20
+  
+  // 这里的逻辑不需要变，因为 boardSize 还是 CSS 逻辑尺寸
   const col = Math.round((e.clientX - rect.left - gap) / gap)
   const row = Math.round((e.clientY - rect.top - gap) / gap)
   
@@ -289,30 +292,53 @@ const handleResize = () => {
 }
 
 // ----------------------------------------------------
-// 🎨 美化版 Canvas 绘图
+// 💎 高清 Canvas 绘图核心逻辑
 // ----------------------------------------------------
 const drawBoard = () => {
-  const ctx = boardCanvas.value?.getContext('2d')
+  const canvas = boardCanvas.value
+  const ctx = canvas?.getContext('2d')
   if (!ctx) return
-  const size = boardSize.value, gap = size/20, r=gap*0.48 // 棋子半径稍大一点更饱满
 
-  // 1. 画棋盘背景 (木色)
-  ctx.fillStyle = '#E3C082' // 稍微亮一点的木色
+  // 1. 获取设备像素比 (Retina屏通常是 2 或 3)
+  const dpr = window.devicePixelRatio || 1
+  
+  // 2. 逻辑尺寸 (CSS尺寸)
+  const logicalSize = boardSize.value
+  
+  // 3. 设置 Canvas 内部实际分辨率 (物理像素)
+  canvas.width = logicalSize * dpr
+  canvas.height = logicalSize * dpr
+  
+  // 4. 设置 CSS 显示尺寸 (逻辑像素)
+  canvas.style.width = logicalSize + 'px'
+  canvas.style.height = logicalSize + 'px'
+  
+  // 5. 缩放绘图上下文，让我们后续的绘图代码继续使用逻辑坐标
+  ctx.scale(dpr, dpr)
+
+  // --- 以下绘图代码使用 logicalSize (例如 350)，无需手动乘 dpr ---
+
+  const size = logicalSize
+  const gap = size / 20
+  const r = gap * 0.48 
+
+  // 背景
+  ctx.fillStyle = '#E3C082'
   ctx.fillRect(0, 0, size, size)
 
-  // 2. 画网格线 (清晰锐利)
+  // 网格线
   ctx.beginPath()
-  ctx.strokeStyle = '#333' // 深灰色线条
+  ctx.strokeStyle = '#333'
   ctx.lineWidth = 1
   for (let i = 0; i < 19; i++) {
-    // 0.5偏移量是为了让1px线在屏幕上更锐利
+    // 0.5偏移量在高清屏上可能需要微调，但通常保持原样即可
     const pos = Math.floor(gap + i * gap) + 0.5 
     ctx.moveTo(gap, pos); ctx.lineTo(size - gap, pos)
     ctx.moveTo(pos, gap); ctx.lineTo(pos, size - gap)
   }
   ctx.stroke()
 
-  // 3. 画星位 (小圆点)
+  // 星位
   ;[3, 9, 15].forEach(x => { [3, 9, 15].forEach(y => { 
     ctx.beginPath()
     ctx.arc(gap + x * gap, gap + y * gap, 3.5, 0, 6.28)
@@ -322,44 +348,32 @@ const drawBoard = () => {
 
   if (!currentSgfData.value) return
 
-  // 🔹 内部函数：画一颗立体棋子
   const draw3DStone = (x, y, color) => {
     const cx = gap + x * gap
     const cy = gap + y * gap
     
-    // A. 投影 (Shadow) - 让棋子浮起来
+    // 投影
     ctx.beginPath()
-    ctx.arc(cx + 2, cy + 2, r, 0, 6.28)
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)' // 半透明黑影
+    ctx.arc(cx + 1, cy + 1, r, 0, 6.28) // 阴影偏移量改小一点，更精致
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'
     ctx.fill()
 
-    // B. 棋子本体 (Body)
+    // 本体
     ctx.beginPath()
     ctx.arc(cx, cy, r, 0, 6.28)
-
-    // C. 径向渐变 (Radial Gradient) 模拟光照
-    // 光源假设在左上角
-    const grad = ctx.createRadialGradient(
-      cx - r * 0.3, cy - r * 0.3, r * 0.1, // 内圆（高光中心）
-      cx, cy, r                            // 外圆（棋子边缘）
-    )
-
+    const grad = ctx.createRadialGradient(cx - r*0.3, cy - r*0.3, r*0.1, cx, cy, r)
     if (color === 'black') {
-      // 黑子：深灰 -> 纯黑
-      grad.addColorStop(0, '#555')
+      grad.addColorStop(0, '#666') // 稍微亮一点的高光
       grad.addColorStop(0.3, '#222')
       grad.addColorStop(1, '#000')
     } else {
-      // 白子：亮白 -> 灰白
       grad.addColorStop(0, '#fff')
       grad.addColorStop(0.8, '#e0e0e0')
-      grad.addColorStop(1, '#aaa') // 边缘稍微暗一点
+      grad.addColorStop(1, '#aaa')
     }
-
     ctx.fillStyle = grad
     ctx.fill()
     
-    // 白子加一圈极细的边框，防止在浅色背景晕开
     if (color === 'white') {
       ctx.strokeStyle = 'rgba(0,0,0,0.1)'
       ctx.lineWidth = 0.5
@@ -367,33 +381,27 @@ const drawBoard = () => {
     }
   }
 
-  // 4. 画预设子
   currentSgfData.value.blackStones.forEach(p => draw3DStone(p.x, p.y, 'black'))
   currentSgfData.value.whiteStones.forEach(p => draw3DStone(p.x, p.y, 'white'))
 
-  // 5. 画走过的序列
   playedMoves.value.forEach((move, index) => {
     draw3DStone(move.x, move.y, move.color)
-    
-    // 最后一手：画个鲜艳的红点（比方块好看）
     if (index === playedMoves.value.length - 1) {
       const cx = gap + move.x * gap
       const cy = gap + move.y * gap
       ctx.beginPath()
-      // 红色小圆点标记
       ctx.arc(cx, cy, 3, 0, 6.28) 
       ctx.fillStyle = '#ff1744' 
       ctx.fill()
     }
   })
 
-  // 6. 错误提示 (绿色光圈)
   if (showHint.value && currentSgfData.value.moves.length > stepIndex.value) {
     const a = currentSgfData.value.moves[stepIndex.value]
     const cx = gap + a.x * gap
     const cy = gap + a.y * gap
     ctx.beginPath()
-    ctx.arc(cx, cy, r * 0.6, 0, 6.28) // 稍微小一点的圈
+    ctx.arc(cx, cy, r * 0.6, 0, 6.28)
     ctx.strokeStyle = '#00e676'
     ctx.lineWidth = 4
     ctx.stroke()

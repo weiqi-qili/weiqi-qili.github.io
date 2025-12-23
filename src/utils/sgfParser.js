@@ -10,16 +10,17 @@ export function sgfToCoord(str) {
 // 解析器
 export function parseSGF(sgfContent) {
   const result = {
-    blackStones: [], // 预设黑子
-    whiteStones: [], // 预设白子
-    moves: [],       // 【关键升级】正解序列 (数组)
+    blackStones: [],
+    whiteStones: [],
+    moves: [],       
     boardSize: 19,
-    initialPlayer: 'black' 
+    initialPlayer: 'black',
+    answer: null
   };
 
   if (!sgfContent) return result;
 
-  // 1. 提取预设黑子 (AB)
+  // 1. 提取预设黑子
   const abMatches = sgfContent.match(/AB(?:\s*\[[a-z]{2}\])+/g);
   if (abMatches) {
     abMatches.forEach(tag => {
@@ -31,7 +32,7 @@ export function parseSGF(sgfContent) {
     });
   }
 
-  // 2. 提取预设白子 (AW)
+  // 2. 提取预设白子
   const awMatches = sgfContent.match(/AW(?:\s*\[[a-z]{2}\])+/g);
   if (awMatches) {
     awMatches.forEach(tag => {
@@ -43,15 +44,17 @@ export function parseSGF(sgfContent) {
     });
   }
   
-  // 3. 判断谁先走 (PL)
+  // 3. 判断谁先走
   const plMatch = sgfContent.match(/PL\[([BW])\]/);
   if (plMatch) {
     result.initialPlayer = plMatch[1] === 'W' ? 'white' : 'black';
   }
 
-  // 4. 【关键升级】提取后续招法序列 (;B[xx] ;W[yy] ...)
-  // 使用 exec 循环匹配，保证顺序
-  const moveRegex = /;([BW])\s*\[([a-z]{2})\]/g;
+  // 4. 【修复】提取招法序列
+  // 旧正则: /;([BW])\s*\[([a-z]{2})\]/g
+  // 新正则: /;\s*([BW])\s*\[([a-z]{2})\]/g  <-- 增加了 \s* 允许分号后有空格/换行
+  const moveRegex = /;\s*([BW])\s*\[([a-z]{2})\]/g;
+  
   let match;
   while ((match = moveRegex.exec(sgfContent)) !== null) {
     const colorCode = match[1]; // 'B' or 'W'
@@ -67,9 +70,14 @@ export function parseSGF(sgfContent) {
     }
   }
 
-  // 如果没有 PL 标签，默认第一步棋的颜色决定先手，或者默认黑先
+  // 修正初始先手逻辑
   if (!plMatch && result.moves.length > 0) {
     result.initialPlayer = result.moves[0].color;
+  }
+  
+  // 5. 设置 answer (第一手即为正解)
+  if (result.moves.length > 0) {
+    result.answer = result.moves[0];
   }
 
   return result;

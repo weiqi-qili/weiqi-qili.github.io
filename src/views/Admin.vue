@@ -19,11 +19,12 @@
       <!-- SGF 预览/校验区 -->
       <div class="preview" v-if="newSgf">
         <div v-if="parsedSgf">
+          <!-- 只要有 answer 就算对，哪怕只有一步 -->
           <span :class="{ok: parsedSgf.answer, err: !parsedSgf.answer}">
-            {{ parsedSgf.answer ? '✅ 检测到正解' : '❌ 未检测到正解 (需包含下一手)' }}
+            {{ parsedSgf.answer ? '✅ 解析成功' : '❌ 未检测到招法 (SGF内必须包含 ;B[...] 或 ;W[...])' }}
           </span>
           <span style="margin-left:10px; color:#888">
-            (黑:{{ parsedSgf.blackStones.length }} 白:{{ parsedSgf.whiteStones.length }})
+            (黑:{{ parsedSgf.blackStones.length }} 白:{{ parsedSgf.whiteStones.length }} 招法:{{ parsedSgf.moves.length }})
           </span>
         </div>
         <div v-else class="err">SGF 解析失败，请检查格式</div>
