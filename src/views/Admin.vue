@@ -16,10 +16,8 @@
         <textarea v-model="newSgf" rows="5" placeholder="(;SZ[19]...)"></textarea>
       </div>
       
-      <!-- SGF 预览/校验区 -->
       <div class="preview" v-if="newSgf">
         <div v-if="parsedSgf">
-          <!-- 只要有 answer 就算对，哪怕只有一步 -->
           <span :class="{ok: parsedSgf.answer, err: !parsedSgf.answer}">
             {{ parsedSgf.answer ? '✅ 解析成功' : '❌ 未检测到招法 (SGF内必须包含 ;B[...] 或 ;W[...])' }}
           </span>
@@ -31,7 +29,7 @@
       </div>
 
       <div class="form-group">
-        <label>选择正确分类 (支持2级或3级):</label>
+        <label>选择正确分类:</label>
         <select v-model="selectedCatId">
           <option :value="null">-- 请选择 --</option>
           <option v-for="c in flatSelectable" :key="c.id" :value="c.id">
@@ -55,14 +53,13 @@
         <input v-model="newCatName" placeholder="分类名称">
         <select v-model="newCatParent">
           <option :value="null" disabled>请选择父级 (必选)</option>
-          <!-- 下拉菜单：父级选择 -->
           <option v-for="c in flatParents" :key="c.id" :value="c.id">
             {{ c.displayName }}
           </option>
         </select>
         <button @click="addCategory">添加</button>
       </div>
-      <p class="tip">提示：支持2级结构（大类-棋理）或3级结构（大类-分组-棋理）。</p>
+      <p class="tip">提示：排序规则为【布局 -> 中盘 -> 胜负处 -> 官子】，其余按录入时间。</p>
 
       <div class="tree-view">
         <div v-for="root in treeData" :key="root.id" class="tree-root">
@@ -94,7 +91,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { supabase } from '../supabase'
-// ⚠️ 如果下面这行报错，说明你没有 src/utils/sgfParser.js 文件
 import { parseSGF } from '../utils/sgfParser'
 
 const tab = ref('problem')
@@ -106,6 +102,9 @@ const selectedCatId = ref(null)
 const description = ref('')
 const newCatName = ref('')
 const newCatParent = ref(null)
+
+// 🌟 自定义排序规则：这几个名字的排前面，其他的按ID排
+const rootSortOrder = ['布局', '中盘', '胜负处', '官子']
 
 onMounted(() => {
   fetchCategories()
@@ -119,53 +118,80 @@ const fetchCategories = async () => {
   if (data) categories.value = data
 }
 
+// 通用排序函数：先按rootSortOrder排名字，再按ID排
+const sortCategories = (list) => {
+  return list.sort((a, b) => {
+    const idxA = rootSortOrder.indexOf(a.name)
+    const idxB = rootSortOrder.indexOf(b.name)
+    
+    // 如果都在列表中，按列表顺序排
+    if (idxA !== -1 && idxB !== -1) return idxA - idxB
+    // 如果只有A在，A排前
+    if (idxA !== -1) return -1
+    // 如果只有B在，B排前
+    if (idxB !== -1) return 1
+    
+    // 如果都不在，按ID（时间）排
+    return a.id - b.id
+  })
+}
+
 // --- 计算属性：分类管理 ---
 
-// 树形结构
 const treeData = computed(() => {
-  const roots = categories.value.filter(c => c.level === 1)
+  // 1. 拿根节点
+  let roots = categories.value.filter(c => c.level === 1)
+  // 2. 排序根节点
+  roots = sortCategories(roots)
+
   return roots.map(root => {
-    const level2 = categories.value.filter(c => c.parent_id === root.id)
+    // 3. 拿二级节点并按ID排序
+    const level2 = categories.value
+      .filter(c => c.parent_id === root.id)
+      .sort((a,b) => a.id - b.id)
+
     return {
       ...root,
       children: level2.map(l2 => ({
         ...l2,
-        children: categories.value.filter(c => c.parent_id === l2.id)
+        // 4. 拿三级节点并按ID排序
+        children: categories.value
+          .filter(c => c.parent_id === l2.id)
+          .sort((a,b) => a.id - b.id)
       }))
     }
   })
 })
 
-// 添加分类时的父级选项 (Level 1 & 2)
 const flatParents = computed(() => {
   const list = []
-  const roots = categories.value.filter(c => c.level === 1)
-  roots.forEach(r => {
+  // 复用 treeData 的排序结果
+  treeData.value.forEach(r => {
     list.push({ id: r.id, displayName: `📂 ${r.name} (根)`, level: 1 })
-    const l2s = categories.value.filter(c => c.parent_id === r.id)
-    l2s.forEach(l2 => {
+    r.children.forEach(l2 => {
       list.push({ id: l2.id, displayName: `　└ 📁 ${l2.name}`, level: 2 })
     })
   })
   return list
 })
 
-// --- 计算属性：录题 ---
-
-// 录题时的分类选择 (Level 2 & 3)
 const flatSelectable = computed(() => {
-  return categories.value
-    .filter(c => c.level !== 1) // 不选根节点
-    .map(c => {
-      const p = categories.value.find(x => x.id === c.parent_id)
-      const pp = p ? categories.value.find(x => x.id === p.parent_id) : null
-      let prefix = ''
-      if (pp) prefix = `${pp.name} > ${p.name} > `
-      else if (p) prefix = `${p.name} > `
+  // 这里的排序也跟随 treeData，保证下拉菜单和管理界面顺序一致
+  const list = []
+  treeData.value.forEach(root => {
+    root.children.forEach(l2 => {
+      // 自己的名字
+      const prefix2 = `${root.name} > `
+      list.push({ id: l2.id, displayName: `${prefix2}${l2.name}` })
       
-      return { id: c.id, displayName: `${prefix}${c.name}` }
+      // 孩子的名字
+      l2.children.forEach(l3 => {
+        const prefix3 = `${root.name} > ${l2.name} > `
+        list.push({ id: l3.id, displayName: `${prefix3}${l3.name}` })
+      })
     })
-    .sort((a,b) => a.id - b.id)
+  })
+  return list
 })
 
 const parsedSgf = computed(() => {
@@ -182,8 +208,6 @@ const canSaveProblem = computed(() => {
   return newSgf.value && selectedCatId.value && parsedSgf.value?.answer
 })
 
-// --- 操作方法 ---
-
 const saveProblem = async () => {
   const { error } = await supabase.from('problems').insert({
     sgf_content: newSgf.value,
@@ -194,7 +218,6 @@ const saveProblem = async () => {
   else {
     alert('保存成功！')
     newSgf.value = ''
-    // 保留分类不重置，方便连续录题
   }
 }
 
