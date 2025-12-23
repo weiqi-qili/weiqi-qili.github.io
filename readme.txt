@@ -21,3 +21,27 @@ code
 Powershell
 git push -u origin main
 这次应该就能成功了！
+
+------
+每次你在本地写完代码，只需要：
+npm run dev (本地看效果)
+git add .
+git commit -m "更新说明"
+git push
+
+我已经正常提交到github，并且构建成功，
+可以打开qili.iloveweiqi.com了。
+这是数据库信息
+https://ovfvidgthyezdpijgbgl.supabase.co
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92ZnZpZGd0aHllemRwaWpnYmdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY0NjE2NDgsImV4cCI6MjA4MjAzNzY0OH0.j1wgus8CaL1i8NOXgrYMMPiFVcPen1rWhUaBRvz0o9Y
+我忘记最终的目录结构和代码了，
+帮我生成全部最新的代码，先测试一下。
+---
+因为国内访问supabase也受限，
+所以也要通过cloudflare去访问
+supabase-qili.iloveweiqi.com
+帮我
+----
+挺好的：
+1、棋盘尽量大一些
+2、做错后，提示正解。
